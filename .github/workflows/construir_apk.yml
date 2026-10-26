@@ -1,0 +1,48 @@
+# Compila el APK de U Farm automáticamente en GitHub.
+# Se ejecuta cada vez que suben cambios, o a mano desde la pestaña "Actions".
+# El APK queda para descargar al final de la ejecución, en "Artifacts".
+
+name: Construir APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Descargar paquetes
+        run: flutter pub get
+
+      - name: Preparar Android
+        run: dart run herramientas/preparar_android.dart
+
+      - name: Revisar el código (solo informativo)
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        continue-on-error: true
+
+      - name: Compilar el APK
+        run: flutter build apk --release
+
+      - name: Guardar el APK para descargar
+        uses: actions/upload-artifact@v4
+        with:
+          name: U-Farm-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
