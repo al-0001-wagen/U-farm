@@ -16,7 +16,7 @@ import 'package:http/http.dart' as http;
 // ---------------------------------------------------------------------------
 
 /// La misma URL que pusieron en el receptor (sin "/" al final).
-const String urlFirebase = 'https://TU-PROYECTO-default-rtdb.firebaseio.com';
+const String urlFirebase = 'https://u-farm-fbd03-default-rtdb.firebaseio.com/;
 
 /// Rangos normales de un conejo adulto. Confírmenlos con un veterinario
 /// y ajústenlos si usan otro animal (por ejemplo, gallinas).
