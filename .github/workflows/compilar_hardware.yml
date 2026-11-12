@@ -1,0 +1,38 @@
+# Revisa que los programas de Arduino de la carpeta hardware compilen
+# para la ESP32. Se ejecuta cuando cambian, o a mano desde "Actions".
+
+name: Revisar programas de Arduino
+
+on:
+  push:
+    paths:
+      - 'hardware/**'
+      - '.github/workflows/compilar_hardware.yml'
+  workflow_dispatch:
+
+jobs:
+  esp32:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Compilar los programas para ESP32
+        uses: arduino/compile-sketches@v1
+        with:
+          fqbn: esp32:esp32:esp32
+          platforms: |
+            - name: esp32:esp32
+              source-url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          sketch-paths: |
+            - hardware
+          libraries: |
+            - name: ArduinoJson
+            - name: DHT sensor library
+            - name: Adafruit Unified Sensor
+            - name: ESP32Servo
+            - name: LoRa
+            - name: SparkFun MAX3010x Pulse and Proximity Sensor Library
+            - name: OneWire
+            - name: DallasTemperature
+          enable-deltas-report: false

@@ -27,7 +27,7 @@ class ConfigZona {
   String nombre;
   String modo; // 'manual', 'horario' o 'auto'
   List<String> horarios; // 'HH:MM'
-  int duracionMin;
+  int duracionSeg;
   int umbralHumedad;
   bool saltarSiLlueve;
   double caudalLpm;
@@ -36,7 +36,7 @@ class ConfigZona {
     required this.nombre,
     required this.modo,
     required this.horarios,
-    required this.duracionMin,
+    required this.duracionSeg,
     required this.umbralHumedad,
     required this.saltarSiLlueve,
     required this.caudalLpm,
@@ -51,10 +51,10 @@ class ConfigZona {
       horarios: horarios is List
           ? horarios.whereType<String>().toList()
           : <String>[],
-      duracionMin: (j['duracionMin'] as num?)?.round() ?? 10,
+      duracionSeg: (j['duracionSeg'] as num?)?.round() ?? 5,
       umbralHumedad: (j['umbralHumedad'] as num?)?.round() ?? 35,
       saltarSiLlueve: (j['saltarSiLlueve'] as bool?) ?? true,
-      caudalLpm: (j['caudalLpm'] as num?)?.toDouble() ?? 8,
+      caudalLpm: (j['caudalLpm'] as num?)?.toDouble() ?? 1.5,
     );
   }
 
@@ -62,7 +62,7 @@ class ConfigZona {
         'nombre': nombre,
         'modo': modo,
         'horarios': horarios,
-        'duracionMin': duracionMin,
+        'duracionSeg': duracionSeg,
         'umbralHumedad': umbralHumedad,
         'saltarSiLlueve': saltarSiLlueve,
         'caudalLpm': caudalLpm,
@@ -77,8 +77,8 @@ class EstadoZona {
   final String motivo;
   final int? lluviaHoy;
   final DateTime? ultimoRiego;
-  final double? ultimoMin;
-  final int? ultimoLitros;
+  final double? ultimoSeg;
+  final int? ultimoMl;
   final DateTime? actualizado;
 
   const EstadoZona({
@@ -89,8 +89,8 @@ class EstadoZona {
     this.motivo = '',
     this.lluviaHoy,
     this.ultimoRiego,
-    this.ultimoMin,
-    this.ultimoLitros,
+    this.ultimoSeg,
+    this.ultimoMl,
     this.actualizado,
   });
 
@@ -106,8 +106,8 @@ class EstadoZona {
       motivo: (j['motivo'] as String?) ?? '',
       lluviaHoy: (j['lluviaHoy'] as num?)?.round(),
       ultimoRiego: fecha(j['ultimoRiego']),
-      ultimoMin: (j['ultimoMin'] as num?)?.toDouble(),
-      ultimoLitros: (j['ultimoLitros'] as num?)?.round(),
+      ultimoSeg: (j['ultimoSeg'] as num?)?.toDouble(),
+      ultimoMl: (j['ultimoMl'] as num?)?.round(),
       actualizado: fecha(j['actualizado']),
     );
   }
@@ -160,8 +160,8 @@ class ServicioRiego {
   static Future<void> guardarConfig(String id, ConfigZona config) =>
       _enviar(_url('/$id/config'), config.aJson());
 
-  static Future<void> regar(String id, int minutos) =>
-      _enviar(_url('/$id/comando'), {'accion': 'regar', 'minutos': minutos});
+  static Future<void> regar(String id, int segundos) =>
+      _enviar(_url('/$id/comando'), {'accion': 'regar', 'segundos': segundos});
 
   static Future<void> detener(String id) =>
       _enviar(_url('/$id/comando'), {'accion': 'detener'});
@@ -199,7 +199,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
     super.initState();
     _cargar();
     _temporizador =
-        Timer.periodic(const Duration(seconds: 5), (_) => _cargar());
+        Timer.periodic(const Duration(seconds: 2), (_) => _cargar());
   }
 
   @override
@@ -242,7 +242,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
   @override
   Widget build(BuildContext context) {
     final zonas = _zonas;
-    final litrosHoy = zonas == null ? 0 : _litrosDeHoy(zonas);
+    final mlHoy = zonas == null ? 0 : _mlDeHoy(zonas);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1EFE8),
@@ -280,17 +280,17 @@ class _PantallaRiegoState extends State<PantallaRiego> {
                   ),
                 if (zonas.isNotEmpty) ...[
                   _resumenLluvia(zonas),
-                  if (litrosHoy > 0)
+                  if (mlHoy > 0)
                     _aviso(Icons.water, 'Agua usada en los últimos riegos de hoy: '
-                        '$litrosHoy L aprox.', _azul),
+                        '$mlHoy mL aprox.', _azul),
                 ],
                 for (final z in zonas)
                   _TarjetaZona(
                     zona: z,
                     alCambiar: () => _guardar(z),
-                    alRegar: (min) => _ejecutar(
-                      () => ServicioRiego.regar(z.id, min),
-                      'Orden enviada: regar $min min. '
+                    alRegar: (seg) => _ejecutar(
+                      () => ServicioRiego.regar(z.id, seg),
+                      'Orden enviada: regar $seg s. '
                       'El controlador la aplicará en unos segundos.',
                     ),
                     alDetener: () => _ejecutar(
@@ -303,7 +303,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
     );
   }
 
-  int _litrosDeHoy(List<ZonaRiego> zonas) {
+  int _mlDeHoy(List<ZonaRiego> zonas) {
     final hoy = DateTime.now();
     var total = 0;
     for (final z in zonas) {
@@ -312,7 +312,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
           f.year == hoy.year &&
           f.month == hoy.month &&
           f.day == hoy.day) {
-        total += z.estado.ultimoLitros ?? 0;
+        total += z.estado.ultimoMl ?? 0;
       }
     }
     return total;
@@ -364,7 +364,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
 class _TarjetaZona extends StatelessWidget {
   final ZonaRiego zona;
   final VoidCallback alCambiar;
-  final void Function(int minutos) alRegar;
+  final void Function(int segundos) alRegar;
   final VoidCallback alDetener;
 
   const _TarjetaZona({
@@ -446,9 +446,9 @@ class _TarjetaZona extends StatelessWidget {
       color = Colors.orange.shade800;
     } else if (e.ultimoRiego != null) {
       texto = 'Apagada · último riego ${_haceCuanto(e.ultimoRiego!)}';
-      if (e.ultimoMin != null) texto += ' (${e.ultimoMin} min';
-      if (e.ultimoLitros != null) texto += ', ${e.ultimoLitros} L';
-      if (e.ultimoMin != null) texto += ')';
+      if (e.ultimoSeg != null) texto += ' (${e.ultimoSeg} s';
+      if (e.ultimoMl != null) texto += ', ${e.ultimoMl} mL';
+      if (e.ultimoSeg != null) texto += ')';
       if (e.motivo.startsWith('omitido')) texto += '\nÚltimo programado: ${e.motivo}';
     } else {
       texto = 'Apagada';
@@ -607,12 +607,13 @@ class _TarjetaZona extends StatelessWidget {
 
   Widget _deslizadorDuracion() {
     return _SliderGuardable(
-      titulo: (v) => 'Duración de cada riego: $v min',
-      valor: c.duracionMin,
+      titulo: (v) =>
+          'Duración de cada riego: $v s (≈ ${_ml(v)} mL)',
+      valor: c.duracionSeg,
       min: 1,
       max: 60,
       alSoltar: (v) {
-        c.duracionMin = v;
+        c.duracionSeg = v;
         alCambiar();
       },
     );
@@ -632,10 +633,13 @@ class _TarjetaZona extends StatelessWidget {
     );
   }
 
+  /// Mililitros que echa la bomba en [segundos], según su caudal en L/min.
+  int _ml(int segundos) => (segundos / 60 * c.caudalLpm * 1000).round();
+
   // ----- Diálogos -----
 
   Future<void> _elegirMinutos(BuildContext context) async {
-    final minutos = await showModalBottomSheet<int>(
+    final segundos = await showModalBottomSheet<int>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Column(
@@ -646,18 +650,18 @@ class _TarjetaZona extends StatelessWidget {
               child: Text('¿Cuánto tiempo regar?',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ),
-            for (final m in [5, 10, 15, 30])
+            for (final s in [3, 5, 10, 20])
               ListTile(
                 leading: const Icon(Icons.timer_outlined),
-                title: Text('$m minutos'),
-                subtitle: Text('≈ ${(m * c.caudalLpm).round()} litros'),
-                onTap: () => Navigator.pop(ctx, m),
+                title: Text('$s segundos'),
+                subtitle: Text('≈ ${_ml(s)} mL de agua'),
+                onTap: () => Navigator.pop(ctx, s),
               ),
           ],
         ),
       ),
     );
-    if (minutos != null) alRegar(minutos);
+    if (segundos != null) alRegar(segundos);
   }
 
   Future<void> _agregarHorario(BuildContext context) async {

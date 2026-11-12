@@ -8,6 +8,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -68,26 +69,32 @@ class EstadoVidrios {
   final int apertura; // %
   final String moviendo; // 'abriendo', 'cerrando' o ''
   final String motivo;
-  final bool calibrado;
+  final bool lluviaSensor; // el sensor de la maqueta detectó agua
   final double? tempInterior;
   final int? humedadInterior;
   final int? viento;
   final bool lloviendo;
-  final double recorridoM;
-  final double velocidadMs;
+  final double recorridoCm; // L
+  final double velocidadCmS; // v
+  final double radioCm; // r del engrane
+  final double? posicionCm; // x
+  final int? anguloGrados; // θ del servo
   final DateTime? actualizado;
 
   const EstadoVidrios({
     this.apertura = 0,
     this.moviendo = '',
     this.motivo = '',
-    this.calibrado = false,
+    this.lluviaSensor = false,
     this.tempInterior,
     this.humedadInterior,
     this.viento,
     this.lloviendo = false,
-    this.recorridoM = 4.5,
-    this.velocidadMs = 0.1,
+    this.recorridoCm = 9,
+    this.velocidadCmS = 1,
+    this.radioCm = 3,
+    this.posicionCm,
+    this.anguloGrados,
     this.actualizado,
   });
 
@@ -98,13 +105,16 @@ class EstadoVidrios {
       apertura: (j['apertura'] as num?)?.round() ?? 0,
       moviendo: (j['moviendo'] as String?) ?? '',
       motivo: (j['motivo'] as String?) ?? '',
-      calibrado: j['calibrado'] == true,
+      lluviaSensor: j['lluviaSensor'] == true,
       tempInterior: (j['tempInterior'] as num?)?.toDouble(),
       humedadInterior: (j['humedadInterior'] as num?)?.round(),
       viento: (j['viento'] as num?)?.round(),
       lloviendo: j['lloviendo'] == true,
-      recorridoM: (j['recorridoM'] as num?)?.toDouble() ?? 4.5,
-      velocidadMs: (j['velocidadMs'] as num?)?.toDouble() ?? 0.1,
+      recorridoCm: (j['recorridoCm'] as num?)?.toDouble() ?? 9,
+      velocidadCmS: (j['velocidadCmS'] as num?)?.toDouble() ?? 1,
+      radioCm: (j['radioCm'] as num?)?.toDouble() ?? 3,
+      posicionCm: (j['posicionCm'] as num?)?.toDouble(),
+      anguloGrados: (j['anguloGrados'] as num?)?.round(),
       actualizado: act is num
           ? DateTime.fromMillisecondsSinceEpoch(act.toInt())
           : null,
@@ -280,7 +290,9 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
               Colors.red.shade700),
         if (bloqueado)
           _aviso(Icons.umbrella,
-              e.lloviendo
+              e.lluviaSensor
+                  ? 'El sensor detectó lluvia: el techo se mantiene cerrado.'
+                  : e.lloviendo
                   ? 'Está lloviendo: el techo se mantiene cerrado.'
                   : 'Viento fuerte (${e.viento} km/h): el techo se mantiene cerrado.',
               const Color(0xFF0284C7)),
@@ -298,9 +310,6 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
                 Expanded(child: Text(_textoEstado(e))),
               ],
             ),
-            if (!e.calibrado)
-              const Text('Calibrando: cerrando hasta el tope…',
-                  style: TextStyle(color: Colors.orange)),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -359,7 +368,14 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
                 _dato(Icons.water_drop_outlined, 'Humedad',
                     e.humedadInterior == null ? '—' : '${e.humedadInterior} %'),
                 _dato(Icons.air, 'Viento', e.viento == null ? '—' : '${e.viento} km/h'),
-                _dato(Icons.umbrella_outlined, 'Lluvia', e.lloviendo ? 'Sí' : 'No'),
+                _dato(
+                    Icons.umbrella_outlined,
+                    'Lluvia',
+                    e.lluviaSensor
+                        ? 'Sí (sensor)'
+                        : e.lloviendo
+                            ? 'Sí (pronóstico)'
+                            : 'No'),
               ],
             ),
           ],
@@ -460,22 +476,39 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
 
   /// Muestra las dos funciones lineales del proyecto con los datos reales.
   Widget _tarjetaMatematica(EstadoVidrios e, ConfigVidrios? c) {
-    final v = e.velocidadMs;
-    final l = e.recorridoM;
+    final v = e.velocidadCmS;
+    final l = e.recorridoCm;
+    final r = e.radioCm;
     final tTotal = l / v;
-    final xActual = l * e.apertura / 100;
+    final xActual = e.posicionCm ?? l * e.apertura / 100;
+    final thetaRad = xActual / r;
+    final omegaGrados = v / r * 180 / pi;
     String n(double x, [int d = 2]) => x.toStringAsFixed(d);
 
     final filas = <Widget>[
-      const Text('1. Posición del vidrio en el tiempo',
+      const Text('1. Del giro del servo al avance del vidrio',
+          style: TextStyle(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 6),
+      _formula('x = r · θ'),
+      Text('r = ${n(r, 1)} cm (radio del engrane), θ en radianes'),
+      Text('Abrir ${n(l, 1)} cm necesita θ = ${n(l / r)} rad '
+          '≈ ${(l / r * 180 / pi).round()}°'),
+      const SizedBox(height: 4),
+      Text(
+          'Ahora: θ = ${n(thetaRad)} rad (${(thetaRad * 180 / pi).round()}°) '
+          '→ x = ${n(xActual, 1)} cm',
+          style: const TextStyle(color: Colors.black54)),
+      const Divider(height: 24),
+      const Text('2. Posición del vidrio en el tiempo',
           style: TextStyle(fontWeight: FontWeight.w700)),
       const SizedBox(height: 6),
       _formula('x(t) = v · t'),
-      Text('v = ${n(v)} m/s (velocidad del motor)'),
+      Text('v = ${n(v, 1)} cm/s, el servo gira a ω = v / r '
+          '≈ ${omegaGrados.round()}° por segundo'),
       Text('Dominio: 0 ≤ t ≤ ${n(tTotal, 1)} s   (T = L / v)'),
-      Text('Rango: 0 ≤ x ≤ ${n(l)} m   (L = recorrido)'),
+      Text('Rango: 0 ≤ x ≤ ${n(l, 1)} cm   (L = recorrido)'),
       const SizedBox(height: 4),
-      Text('Ahora: x = ${n(xActual)} m, se llegó en t = ${n(xActual / v, 1)} s desde cerrado.',
+      Text('Desde cerrado, llegar aquí tomó t = ${n(xActual / v, 1)} s.',
           style: const TextStyle(color: Colors.black54)),
     ];
 
@@ -485,7 +518,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
       final pendiente = 100 / (ta - tc);
       filas.addAll([
         const Divider(height: 24),
-        const Text('2. Apertura según la temperatura (modo automático)',
+        const Text('3. Apertura según la temperatura (modo automático)',
             style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         _formula('A(T) = 100 · (T − ${tc.round()}) / (${ta.round()} − ${tc.round()})'),
@@ -616,12 +649,13 @@ class _DiagramaTecho extends StatelessWidget {
                   children: [
                     // Hueco del techo: se ve el cielo
                     Container(color: _cielo),
-                    // El vidrio se desliza hacia la izquierda al abrir
+                    // El vidrio se desliza de lado (hacia abajo en el
+                    // dibujo) al abrir, como en la maqueta
                     AnimatedFractionallySizedBox(
                       duration: const Duration(milliseconds: 800),
-                      alignment: Alignment.centerRight,
-                      widthFactor: (1 - apertura).clamp(0.0, 1.0),
-                      heightFactor: 1,
+                      alignment: Alignment.bottomCenter,
+                      widthFactor: 1,
+                      heightFactor: (1 - apertura).clamp(0.0, 1.0),
                       child: Container(
                         decoration: BoxDecoration(
                           color: _vidrio.withValues(alpha: 0.85),
@@ -632,8 +666,7 @@ class _DiagramaTecho extends StatelessWidget {
                     if (apertura > 0.15)
                       const Positioned(
                         left: 8,
-                        top: 0,
-                        bottom: 0,
+                        top: 4,
                         child: Icon(Icons.wb_sunny, color: Colors.amber),
                       ),
                   ],
@@ -644,7 +677,7 @@ class _DiagramaTecho extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         const Text(
-          'Estructura 18.7 × 6.8 m · vidrio 14.3 × 4.5 m',
+          'Estructura 18.7 × 6.8 m · maqueta 1:50 de 37.4 × 13.6 cm',
           style: TextStyle(fontSize: 11, color: Colors.black45),
         ),
       ],

@@ -1,25 +1,31 @@
 // =====================================================================
-// U Farm - CONTROLADOR DE RIEGO
-// Abre y cierra las válvulas de los aspersores según:
+// U Farm - CONTROLADOR DE RIEGO (versión maqueta)
+// Enciende y apaga las minibombas de agua según:
 //   - órdenes de la app ("Regar ahora" / "Detener")
 //   - horarios programados (ej. 06:00 y 19:00)
 //   - modo automático: riega cuando el suelo está seco
 // y se salta el riego si el pronóstico indica lluvia.
 //
-// Material:
-//   - ESP32 (cualquier modelo con WiFi)
-//   - Módulo de 4 relevadores (relés)
-//   - Válvulas solenoides normalmente cerradas, una por zona.
-//     Pueden ser de 12 V DC (con fuente de 12 V) o de 24 V AC, las
-//     típicas de los sistemas de riego de jardín (con transformador
-//     de 24 V AC). El relevador sirve para ambas.
-//   - Sensores CAPACITIVOS de humedad de suelo (v1.2), uno por zona.
-//     No usen los resistivos de dos patitas: se oxidan en semanas.
-//   - Aspersores o goteros conectados después de cada válvula.
+// En la maqueta los riegos duran SEGUNDOS: una minibomba de ~1.5 L/min
+// llena una maceta pequeña en unos 4 segundos.
+//
+// Material (por zona): minibomba sumergible 3-6 V, un canal del módulo
+// de relevadores y un sensor CAPACITIVO de humedad de suelo v1.2.
+//
+// Conexiones:
+//   Eliminador 5 V (+) -> COM del relevador;  NO -> cable rojo de la bomba
+//   Cable negro de la bomba -> GND del eliminador
+//   Módulo de relevadores (sin el jumper JD-VCC):
+//     VCC -> 3V3 de la ESP32   GND -> GND de la ESP32
+//     IN1 -> GPIO 25 (zona 1)  IN2 -> GPIO 26 (zona 2)
+//     JD-VCC -> 5 V del eliminador, y su GND -> GND del eliminador
+//   Sensores de humedad: VCC -> 3V3, GND -> GND,
+//     AOUT -> GPIO 34 (zona 1) y GPIO 35 (zona 2)
+//   Capacitor de 470 uF entre 5 V y GND del eliminador.
 //
 // Librerías: "ArduinoJson" de Benoit Blanchon (versión 7).
-//
 // La app lee y escribe en Firebase, en la ruta /riego/zonas.
+// Para probar las conexiones sin internet, usen primero prueba_bomba.ino.
 // =====================================================================
 
 #include <WiFi.h>
@@ -31,7 +37,7 @@
 // ---------- CONFIGURACIÓN ----------
 const char* WIFI_NOMBRE  = "NOMBRE_DE_TU_WIFI";
 const char* WIFI_CLAVE   = "CLAVE_DE_TU_WIFI";
-const char* FIREBASE_URL = "https://TU-PROYECTO-default-rtdb.firebaseio.com";
+const char* FIREBASE_URL = "https://u-farm-fbd03-default-rtdb.firebaseio.com";
 
 // Ubicación de la granja (la misma que en clima.dart)
 const double LATITUD  = 25.6866;
@@ -41,56 +47,65 @@ const double LONGITUD = -100.3161;
 const char* ZONA_HORARIA = "CST6";
 
 // Muchos módulos de relevadores se activan con LOW. Si al encender
-// la placa se abren todas las válvulas, cambien esto a false.
+// la placa se prenden las bombas, cambien esto a false.
 const bool RELE_ACTIVO_EN_BAJO = true;
 
-// Calibración del sensor de humedad: lectura en el aire (seco)
-// y con el sensor dentro de un vaso de agua (mojado).
+// Calibración del sensor de humedad (la dan los números de prueba_bomba.ino):
+// lectura con el sensor al aire (seco) y dentro de un vaso de agua (mojado).
 const int LECTURA_SECO   = 2800;
 const int LECTURA_MOJADO = 1200;
 
 // Seguridad
-const int MAX_MINUTOS_RIEGO   = 60;  // ningún riego dura más que esto
-const int MAX_ZONAS_A_LA_VEZ  = 1;   // con más, baja la presión del agua
-const int PROB_LLUVIA_SALTAR  = 60;  // % de lluvia para saltar el riego
-const unsigned long PAUSA_AUTO_MS = 60UL * 60 * 1000;  // 1 h entre riegos automáticos
+const int MAX_SEGUNDOS_RIEGO  = 60;  // ningún riego dura más que esto
+const int MAX_ZONAS_A_LA_VEZ  = 1;   // una bomba a la vez, para no forzar la fuente
+const int PROB_LLUVIA_SALTAR  = 60;  // % de lluvia para saltar el riego programado
+
+// En modo automático, tiempo mínimo entre dos riegos de la misma zona.
+// El agua tarda en llegar al sensor; sin esta pausa la maceta se inunda.
+const unsigned long PAUSA_AUTO_MS = 2UL * 60 * 1000;  // 2 minutos
 
 // Zonas: id en Firebase, pin del relevador, pin del sensor (-1 = sin sensor).
-// IMPORTANTE: con WiFi encendido, los sensores solo funcionan en los
-// pines 32 a 39 (los demás pines analógicos los usa el WiFi).
+// Con WiFi encendido, los sensores solo funcionan en los pines 32 a 39.
 struct Zona {
   const char* id;
-  int pinValvula;
+  const char* nombreInicial;
+  int pinBomba;
   int pinHumedad;
 
   // Configuración (la cambia la app)
-  String nombre = "";
-  String modo = "horario";          // "manual", "horario" o "auto"
+  String modo = "manual";           // "manual", "horario" o "auto"
   String horarios[6];
   int numHorarios = 0;
-  int duracionMin = 10;
+  int duracionSeg = 5;
   int umbralHumedad = 35;           // % para el modo automático
   bool saltarSiLlueve = true;
-  float caudalLpm = 8;              // litros por minuto de esta zona
+  float caudalLpm = 1.5;            // litros por minuto de esta bomba
 
-  // Estado (lo calcula el controlador)
-  bool regando = false;
-  unsigned long inicioMs = 0;
-  unsigned long duracionMs = 0;
-  String motivo = "";
-  int humedad = -1;
-  int pendienteMin = 0;             // riego en espera de turno
+  // Lo que se le pide a la tarea de las bombas
+  volatile int pendienteSeg = 0;    // riego en espera de turno
+  volatile bool pedirParo = false;
+
+  // Lo que maneja la tarea de las bombas
+  volatile bool regando = false;
+  volatile unsigned long inicioMs = 0;
+  volatile unsigned long finMs = 0;
+  volatile bool recienIniciado = false;
+  volatile bool recienTerminado = false;
+  volatile float segRegados = 0;
+
+  // Solo para el programa principal
   String pendienteMotivo = "";
+  String motivo = "";
+  String motivoParo = "";
+  int humedad = -1;
   bool yaRegoAuto = false;
   unsigned long ultimoAutoMs = 0;
   long ultimaClaveHorario = -1;
 };
 
 Zona zonas[] = {
-  {"zona-1", 25, 34},
-  {"zona-2", 26, 35},
-  {"zona-3", 27, 32},
-  {"zona-4", 14, 33},
+  {"zona-1", "Zona 1 · aspersor", 25, 34},
+  {"zona-2", "Zona 2 · gotero",   26, 35},
 };
 const int NUM_ZONAS = sizeof(zonas) / sizeof(zonas[0]);
 // -----------------------------------
@@ -98,13 +113,58 @@ const int NUM_ZONAS = sizeof(zonas) / sizeof(zonas[0]);
 int probLluviaHoy = -1;   // -1 = todavía no se sabe
 bool lloviendo = false;
 
-unsigned long ultimaLecturaFirebase = 0;
-unsigned long ultimaConsultaClima = 0;
-unsigned long ultimaPublicacion = 0;
-bool climaConsultado = false;
+// ---------------------------------------------------------------------
+// Bombas: una tarea aparte las apaga a tiempo, aunque el WiFi esté lento.
+// Así un riego de 5 s dura 5 s y no 7.
+// ---------------------------------------------------------------------
+
+void ponerBomba(const Zona& z, bool encendida) {
+  bool nivel = RELE_ACTIVO_EN_BAJO ? !encendida : encendida;
+  digitalWrite(z.pinBomba, nivel ? HIGH : LOW);
+}
+
+int zonasRegando() {
+  int n = 0;
+  for (int i = 0; i < NUM_ZONAS; i++) if (zonas[i].regando) n++;
+  return n;
+}
+
+void apagar(Zona& z) {
+  ponerBomba(z, false);
+  z.segRegados = (millis() - z.inicioMs) / 1000.0;
+  z.regando = false;
+  z.recienTerminado = true;
+}
+
+void tareaBombas(void*) {
+  for (;;) {
+    unsigned long ahora = millis();
+    for (int i = 0; i < NUM_ZONAS; i++) {
+      Zona& z = zonas[i];
+      if (z.pedirParo) {
+        z.pedirParo = false;
+        z.pendienteSeg = 0;
+        if (z.regando) apagar(z);
+      }
+      if (z.regando && (long)(ahora - z.finMs) >= 0) apagar(z);
+    }
+    for (int i = 0; i < NUM_ZONAS; i++) {
+      Zona& z = zonas[i];
+      if (z.pendienteSeg > 0 && !z.regando && zonasRegando() < MAX_ZONAS_A_LA_VEZ) {
+        z.inicioMs = millis();
+        z.finMs = z.inicioMs + (unsigned long)z.pendienteSeg * 1000UL;
+        z.pendienteSeg = 0;
+        z.regando = true;
+        z.recienIniciado = true;
+        ponerBomba(z, true);
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
 
 // ---------------------------------------------------------------------
-// Utilidades
+// Internet
 // ---------------------------------------------------------------------
 
 void conectarWiFi() {
@@ -133,11 +193,6 @@ String urlZona(const Zona& z, const char* subruta) {
   return String(FIREBASE_URL) + "/riego/zonas/" + z.id + "/" + subruta + ".json";
 }
 
-void ponerValvula(const Zona& z, bool abierta) {
-  bool nivel = RELE_ACTIVO_EN_BAJO ? !abierta : abierta;
-  digitalWrite(z.pinValvula, nivel ? HIGH : LOW);
-}
-
 int leerHumedad(const Zona& z) {
   if (z.pinHumedad < 0) return -1;
   long suma = 0;
@@ -150,36 +205,31 @@ int leerHumedad(const Zona& z) {
   return constrain(porcentaje, 0, 100);
 }
 
-int zonasRegando() {
-  int n = 0;
-  for (int i = 0; i < NUM_ZONAS; i++) if (zonas[i].regando) n++;
-  return n;
-}
-
 // ---------------------------------------------------------------------
 // Publicar el estado en Firebase (lo lee la app)
 // ---------------------------------------------------------------------
 
-void publicarEstado(Zona& z, bool terminoRiego = false, float minutosRegados = 0) {
+void publicarEstado(Zona& z, bool terminoRiego = false) {
   JsonDocument d;
-  d["regando"] = z.regando;
+  d["regando"] = (bool)z.regando;
   if (z.humedad >= 0) d["humedad"] = z.humedad; else d["humedad"] = nullptr;
 
   long restante = 0;
   if (z.regando) {
-    restante = ((long)z.duracionMs - (long)(millis() - z.inicioMs)) / 1000;
+    restante = ((long)z.finMs - (long)millis() + 999) / 1000;
     if (restante < 0) restante = 0;
   }
   d["restanteSeg"] = restante;
   d["motivo"] = z.motivo;
-  d["enEspera"] = z.pendienteMin > 0;
+  d["enEspera"] = z.pendienteSeg > 0;
   if (probLluviaHoy >= 0) d["lluviaHoy"] = probLluviaHoy; else d["lluviaHoy"] = nullptr;
   d["actualizado"][".sv"] = "timestamp";
 
   if (terminoRiego) {
+    float seg = z.segRegados;
     d["ultimoRiego"][".sv"] = "timestamp";
-    d["ultimoMin"] = round(minutosRegados * 10) / 10.0;
-    d["ultimoLitros"] = round(minutosRegados * z.caudalLpm);
+    d["ultimoSeg"] = round(seg * 10) / 10.0;
+    d["ultimoMl"] = round(seg / 60.0 * z.caudalLpm * 1000);   // mililitros
   }
 
   String cuerpo;
@@ -188,56 +238,60 @@ void publicarEstado(Zona& z, bool terminoRiego = false, float minutosRegados = 0
 }
 
 // ---------------------------------------------------------------------
-// Encender y apagar
+// Pedir y detener riegos
 // ---------------------------------------------------------------------
 
-// Pone un riego en la fila; empieza cuando haya turno.
-void pedirRiego(Zona& z, int minutos, const String& motivo) {
-  if (z.regando) return;
-  z.pendienteMin = constrain(minutos, 1, MAX_MINUTOS_RIEGO);
+void pedirRiego(Zona& z, int segundos, const String& motivo) {
+  if (z.regando || z.pendienteSeg > 0) return;
   z.pendienteMotivo = motivo;
-  Serial.printf("[%s] riego en fila: %d min (%s)\n", z.id, z.pendienteMin, motivo.c_str());
-}
-
-void iniciarRiego(Zona& z) {
-  z.regando = true;
-  z.inicioMs = millis();
-  z.duracionMs = (unsigned long)z.pendienteMin * 60UL * 1000UL;
-  z.motivo = z.pendienteMotivo;
-  z.pendienteMin = 0;
-  ponerValvula(z, true);
-  Serial.printf("[%s] RIEGO INICIADO (%s)\n", z.id, z.motivo.c_str());
-  publicarEstado(z);
+  z.pendienteSeg = constrain(segundos, 1, MAX_SEGUNDOS_RIEGO);
+  Serial.printf("[%s] riego en fila: %d s (%s)\n", z.id, segundos, motivo.c_str());
 }
 
 void detenerRiego(Zona& z, const String& motivo) {
-  z.pendienteMin = 0;
+  z.motivoParo = motivo;
   if (!z.regando) {
+    z.pendienteSeg = 0;
     z.motivo = motivo;
     publicarEstado(z);
     return;
   }
-  ponerValvula(z, false);
-  float minutos = (millis() - z.inicioMs) / 60000.0;
-  z.regando = false;
-  z.motivo = motivo;
-  Serial.printf("[%s] riego detenido (%s), %.1f min\n", z.id, motivo.c_str(), minutos);
-  publicarEstado(z, true, minutos);
+  z.pedirParo = true;   // la tarea de las bombas la apaga
+}
+
+// Avisa a la app de lo que hizo la tarea de las bombas.
+void atenderEventos() {
+  for (int i = 0; i < NUM_ZONAS; i++) {
+    Zona& z = zonas[i];
+    if (z.recienIniciado) {
+      z.recienIniciado = false;
+      z.motivo = z.pendienteMotivo;
+      Serial.printf("[%s] RIEGO INICIADO (%s)\n", z.id, z.motivo.c_str());
+      publicarEstado(z);
+    }
+    if (z.recienTerminado) {
+      z.recienTerminado = false;
+      z.motivo = z.motivoParo.length() > 0 ? z.motivoParo : "terminado";
+      z.motivoParo = "";
+      Serial.printf("[%s] riego terminado: %.1f s\n", z.id, (float)z.segRegados);
+      publicarEstado(z, true);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------
 // Leer configuración y órdenes desde Firebase
 // ---------------------------------------------------------------------
 
-void crearConfiguracion(Zona& z, int numero) {
+void crearConfiguracion(Zona& z) {
   JsonDocument d;
-  d["nombre"] = "Zona " + String(numero);
-  d["modo"] = "horario";
-  d["horarios"][0] = "06:00";
-  d["duracionMin"] = 10;
+  d["nombre"] = z.nombreInicial;
+  d["modo"] = "manual";
+  d["horarios"][0] = "07:00";
+  d["duracionSeg"] = 5;
   d["umbralHumedad"] = 35;
   d["saltarSiLlueve"] = true;
-  d["caudalLpm"] = 8;
+  d["caudalLpm"] = 1.5;
   String cuerpo;
   serializeJson(d, cuerpo);
   peticion("PUT", urlZona(z, "config"), cuerpo);
@@ -256,18 +310,17 @@ void leerFirebase() {
     JsonVariant nodo = doc[z.id];
     JsonVariant cfg = nodo["config"];
 
-    // Primera vez: crear una configuración inicial para que la app la vea
-    if (cfg.isNull()) {
-      crearConfiguracion(z, i + 1);
+    // Primera vez (o configuración de la versión anterior): crear una nueva
+    if (cfg.isNull() || cfg["duracionSeg"].isNull()) {
+      crearConfiguracion(z);
       continue;
     }
 
-    z.nombre = cfg["nombre"] | z.id;
-    z.modo = cfg["modo"] | "horario";
-    z.duracionMin = constrain((int)(cfg["duracionMin"] | 10), 1, MAX_MINUTOS_RIEGO);
+    z.modo = cfg["modo"] | "manual";
+    z.duracionSeg = constrain((int)(cfg["duracionSeg"] | 5), 1, MAX_SEGUNDOS_RIEGO);
     z.umbralHumedad = cfg["umbralHumedad"] | 35;
     z.saltarSiLlueve = cfg["saltarSiLlueve"] | true;
-    z.caudalLpm = cfg["caudalLpm"] | 8.0f;
+    z.caudalLpm = cfg["caudalLpm"] | 1.5f;
 
     z.numHorarios = 0;
     for (JsonVariant h : cfg["horarios"].as<JsonArray>()) {
@@ -281,12 +334,11 @@ void leerFirebase() {
     if (!orden.isNull()) {
       String accion = orden["accion"] | "";
       if (accion == "regar") {
-        pedirRiego(z, orden["minutos"] | z.duracionMin, "manual");
+        pedirRiego(z, orden["segundos"] | z.duracionSeg, "manual");
       } else if (accion == "detener") {
         detenerRiego(z, "detenido desde la app");
       }
-      // Borrar la orden para no repetirla
-      peticion("DELETE", urlZona(z, "comando"), "");
+      peticion("DELETE", urlZona(z, "comando"), "");   // no repetirla
     }
   }
 }
@@ -337,7 +389,7 @@ void revisarHorarios() {
         z.motivo = "omitido por pronóstico de lluvia";
         publicarEstado(z);
       } else {
-        pedirRiego(z, z.duracionMin, "horario " + z.horarios[h]);
+        pedirRiego(z, z.duracionSeg, "horario " + z.horarios[h]);
       }
     }
   }
@@ -346,28 +398,14 @@ void revisarHorarios() {
 void revisarModoAutomatico() {
   for (int i = 0; i < NUM_ZONAS; i++) {
     Zona& z = zonas[i];
-    if (z.modo != "auto" || z.humedad < 0 || z.regando || z.pendienteMin > 0) continue;
+    if (z.modo != "auto" || z.humedad < 0 || z.regando || z.pendienteSeg > 0) continue;
     if (z.humedad >= z.umbralHumedad) continue;
     if (z.yaRegoAuto && millis() - z.ultimoAutoMs < PAUSA_AUTO_MS) continue;
     if (z.saltarSiLlueve && lloviendo) continue;
 
-    pedirRiego(z, z.duracionMin, "suelo seco (" + String(z.humedad) + " %)");
+    pedirRiego(z, z.duracionSeg, "suelo seco (" + String(z.humedad) + " %)");
     z.yaRegoAuto = true;
     z.ultimoAutoMs = millis();
-  }
-}
-
-// Termina los riegos cumplidos y da turno a los que esperan.
-void atenderRiegos() {
-  for (int i = 0; i < NUM_ZONAS; i++) {
-    Zona& z = zonas[i];
-    if (z.regando && millis() - z.inicioMs >= z.duracionMs) {
-      detenerRiego(z, "terminado");
-    }
-  }
-  for (int i = 0; i < NUM_ZONAS; i++) {
-    if (zonasRegando() >= MAX_ZONAS_A_LA_VEZ) break;
-    if (zonas[i].pendienteMin > 0 && !zonas[i].regando) iniciarRiego(zonas[i]);
   }
 }
 
@@ -376,10 +414,12 @@ void atenderRiegos() {
 void setup() {
   Serial.begin(115200);
   for (int i = 0; i < NUM_ZONAS; i++) {
-    pinMode(zonas[i].pinValvula, OUTPUT);
-    ponerValvula(zonas[i], false);   // todo cerrado al arrancar
+    pinMode(zonas[i].pinBomba, OUTPUT);
+    ponerBomba(zonas[i], false);   // todo apagado al arrancar
   }
   analogReadResolution(12);
+
+  xTaskCreatePinnedToCore(tareaBombas, "bombas", 4096, nullptr, 2, nullptr, 1);
 
   conectarWiFi();
   configTzTime(ZONA_HORARIA, "pool.ntp.org", "time.nist.gov");
@@ -387,32 +427,36 @@ void setup() {
 }
 
 void loop() {
+  static unsigned long tFirebase = 0, tClima = 0, tPublicar = 0;
+  static bool primeraVez = true;
   unsigned long ahora = millis();
+
   conectarWiFi();
 
-  // Cada 10 s: humedad del suelo, configuración y órdenes de la app
-  if (ahora - ultimaLecturaFirebase >= 10000 || ultimaLecturaFirebase == 0) {
-    ultimaLecturaFirebase = ahora;
+  // Cada 3 s: humedad del suelo, configuración y órdenes de la app
+  if (primeraVez || ahora - tFirebase >= 3000) {
+    tFirebase = ahora;
     for (int i = 0; i < NUM_ZONAS; i++) zonas[i].humedad = leerHumedad(zonas[i]);
     leerFirebase();
   }
 
   // Cada 30 min: pronóstico de lluvia
-  if (!climaConsultado || ahora - ultimaConsultaClima >= 30UL * 60 * 1000) {
-    ultimaConsultaClima = ahora;
-    climaConsultado = true;
+  if (primeraVez || ahora - tClima >= 30UL * 60 * 1000) {
+    tClima = ahora;
     consultarLluvia();
   }
 
   revisarHorarios();
   revisarModoAutomatico();
-  atenderRiegos();   // funciona aunque se caiga el WiFi: el riego se apaga a tiempo
+  atenderEventos();
 
-  // Cada 60 s: publicar el estado de todas las zonas
-  if (ahora - ultimaPublicacion >= 60000) {
-    ultimaPublicacion = ahora;
+  // Cada 30 s: publicar el estado de todas las zonas (cada 2 s si alguna riega)
+  bool alguienRiega = zonasRegando() > 0;
+  if (primeraVez || ahora - tPublicar >= (alguienRiega ? 2000UL : 30000UL)) {
+    tPublicar = ahora;
     for (int i = 0; i < NUM_ZONAS; i++) publicarEstado(zonas[i]);
   }
 
-  delay(200);
+  primeraVez = false;
+  delay(50);
 }

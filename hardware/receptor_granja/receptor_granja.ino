@@ -22,7 +22,7 @@ const char* WIFI_NOMBRE = "NOMBRE_DE_TU_WIFI";
 const char* WIFI_CLAVE  = "CLAVE_DE_TU_WIFI";
 
 // URL de su Realtime Database de Firebase (sin "/" al final)
-const char* FIREBASE_URL = "https://TU-PROYECTO-default-rtdb.firebaseio.com";
+const char* FIREBASE_URL = "https://u-farm-fbd03-default-rtdb.firebaseio.com";
 
 const long FRECUENCIA_LORA = 915E6;   // igual que en el collar
 const int  PALABRA_SYNC    = 0x55;    // igual que en el collar

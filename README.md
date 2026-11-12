@@ -13,7 +13,7 @@ Aplicación de la granja urbana U Farm. Equipo 2, Grupo 211.
 
 ## Antes de compilar: configurar
 
-1. **`lib/ganado.dart`**: cambien `urlFirebase` por la URL de su Realtime Database de Firebase. La usan el ganado, el riego y los vidrios.
+1. **`lib/ganado.dart`**: `urlFirebase` es la URL de su Realtime Database de Firebase, sin "/" al final. La usan el ganado, el riego y los vidrios.
 2. **`lib/clima.dart`**: cambien las coordenadas de `UbicacionGranja` por las del prototipo.
 
 Pongan la misma URL de Firebase en los cuatro programas de la carpeta `hardware/`.
@@ -57,9 +57,15 @@ Cada programa de `hardware/` se abre con Arduino IDE (cada `.ino` debe quedar de
 
 | Programa | Función |
 |---|---|
+| `prueba_bomba` | Prueba sin internet: enciende cada bomba 5 s y muestra las lecturas de los sensores de humedad (para calibrarlos) |
+| `controlador_riego` | Riego de la maqueta: 2 zonas con minibombas, riegos de algunos segundos |
+| `prueba_servo` | Prueba sin internet: deja el servo en 0° para montar el engrane, lo mueve por ángulos y muestra el sensor de lluvia |
+| `controlador_vidrios` | Vidrio corredizo con servo MG90S, engrane y cremallera (x = r·θ y x(t) = v·t) |
 | `collar_conejo` | Mide temperatura y pulso del animal y los envía por LoRa |
 | `receptor_granja` | Recibe los collares y sube los datos a Firebase |
-| `controlador_riego` | Abre y cierra las válvulas de los aspersores |
-| `controlador_vidrios` | Mueve el vidrio del techo (función lineal x(t) = v·t) |
+
+Antes de cargar los controladores, escriban el nombre y la clave de su WiFi al inicio de cada archivo. La URL de Firebase ya está puesta.
+
+Cada vez que cambia algo en `hardware/`, GitHub revisa que todos los programas compilen para la ESP32 (pestaña Actions, "Revisar programas de Arduino").
 
 La app funciona aunque todavía no tengan el hardware: el clima y la enciclopedia funcionan solos, y las demás pantallas muestran un aviso mientras no haya Firebase o controladores conectados.
