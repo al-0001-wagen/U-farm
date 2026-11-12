@@ -1,13 +1,15 @@
 // U Farm - Contenido de la enciclopedia
 //
-// Aquí está toda la información de cultivos, ganado y sinergias.
-// Para agregar una ficha nueva, copien una entrada existente y cambien
-// sus datos. Para agregar una sinergia, agreguen una línea a la lista
-// "sinergias" usando los "id" de las dos fichas.
+// Aquí está la información "de fábrica" de cultivos, ganado y sinergias.
+// Desde la app se pueden agregar, cambiar y borrar fichas y sinergias;
+// esos cambios se guardan en el teléfono (ver el final de este archivo)
+// y no modifican estas listas.
 //
 // Las fechas de siembra son aproximadas para el clima cálido y semiárido
 // de Nuevo León (veranos muy calurosos y heladas ocasionales de diciembre
 // a febrero). Pueden ajustarlas con el calendario agrícola del INIFAP.
+
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
@@ -24,6 +26,15 @@ class Seccion {
   final IconData icono;
   final List<String> puntos;
   const Seccion(this.titulo, this.icono, this.puntos);
+
+  Map<String, dynamic> aJson() =>
+      {'titulo': titulo, 'icono': nombreDeIcono(icono), 'puntos': puntos};
+
+  factory Seccion.desdeJson(Map<String, dynamic> j) => Seccion(
+        (j['titulo'] as String?) ?? '',
+        iconosSeccion[j['icono']] ?? Icons.notes,
+        [for (final p in (j['puntos'] as List? ?? const [])) '$p'],
+      );
 }
 
 class Entrada {
@@ -46,6 +57,34 @@ class Entrada {
     this.mesesSiembra = const [],
     required this.secciones,
   });
+
+  Map<String, dynamic> aJson() => {
+        'id': id,
+        'nombre': nombre,
+        'cientifico': cientifico,
+        'emoji': emoji,
+        'tipo': tipo.name,
+        'resumen': resumen,
+        'mesesSiembra': mesesSiembra,
+        'secciones': [for (final s in secciones) s.aJson()],
+      };
+
+  factory Entrada.desdeJson(Map<String, dynamic> j) => Entrada(
+        id: j['id'] as String,
+        nombre: (j['nombre'] as String?) ?? '',
+        cientifico: (j['cientifico'] as String?) ?? '',
+        emoji: (j['emoji'] as String?) ?? '🌱',
+        tipo: j['tipo'] == 'ganado' ? TipoEntrada.ganado : TipoEntrada.cultivo,
+        resumen: (j['resumen'] as String?) ?? '',
+        mesesSiembra: [
+          for (final m in (j['mesesSiembra'] as List? ?? const []))
+            if (m is num && m >= 1 && m <= 12) m.toInt(),
+        ],
+        secciones: [
+          for (final s in (j['secciones'] as List? ?? const []))
+            if (s is Map) Seccion.desdeJson(Map<String, dynamic>.from(s)),
+        ],
+      );
 }
 
 class Sinergia {
@@ -54,6 +93,17 @@ class Sinergia {
   final TipoSinergia tipo;
   final String razon;
   const Sinergia(this.a, this.b, this.tipo, this.razon);
+
+  Map<String, dynamic> aJson() =>
+      {'a': a, 'b': b, 'tipo': tipo.name, 'razon': razon};
+
+  factory Sinergia.desdeJson(Map<String, dynamic> j) => Sinergia(
+        j['a'] as String,
+        j['b'] as String,
+        TipoSinergia.values.firstWhere((t) => t.name == j['tipo'],
+            orElse: () => TipoSinergia.beneficiosa),
+        (j['razon'] as String?) ?? '',
+      );
 }
 
 // Íconos de las secciones
@@ -70,11 +120,35 @@ const _produccion = Icons.egg_outlined;
 const _abono = Icons.recycling;
 const _legal = Icons.gavel;
 
+/// Íconos que se pueden elegir para una sección al editar una ficha.
+const Map<String, IconData> iconosSeccion = {
+  'nota': Icons.notes,
+  'clima': _clima,
+  'riego': _riego,
+  'suelo': _suelo,
+  'plagas': _plagas,
+  'cosecha': _cosecha,
+  'casa': _casa,
+  'comida': _comida,
+  'temperatura': _temp,
+  'salud': _salud,
+  'produccion': _produccion,
+  'abono': _abono,
+  'normas': _legal,
+};
+
+String nombreDeIcono(IconData icono) {
+  for (final e in iconosSeccion.entries) {
+    if (e.value == icono) return e.key;
+  }
+  return 'nota';
+}
+
 // ---------------------------------------------------------------------------
 // CULTIVOS
 // ---------------------------------------------------------------------------
 
-const List<Entrada> entradas = [
+const List<Entrada> entradasDeFabrica = [
   Entrada(
     id: 'tomate',
     nombre: 'Tomate',
@@ -650,7 +724,7 @@ const List<Entrada> entradas = [
 // beneficiosa = se ayudan; precaucion = sirve con cuidado; evitar = no juntar
 // ---------------------------------------------------------------------------
 
-const List<Sinergia> sinergias = [
+const List<Sinergia> sinergiasDeFabrica = [
   // Planta con planta
   Sinergia('maiz', 'frijol', TipoSinergia.beneficiosa,
       'Milpa: el frijol aporta nitrógeno al suelo y el maíz le sirve de tutor.'),
@@ -723,6 +797,124 @@ const List<Sinergia> sinergias = [
   Sinergia('gallina', 'codorniz', TipoSinergia.precaucion,
       'Alójalas por separado: las gallinas las dominan y comparten enfermedades.'),
 ];
+
+// ---------------------------------------------------------------------------
+// CAMBIOS HECHOS DESDE LA APP
+// Las listas de arriba nunca cambian. Aquí se guarda lo que la persona
+// agregó, cambió o borró, y con eso se arma la enciclopedia que se ve.
+// ---------------------------------------------------------------------------
+
+final Map<String, Entrada> _fichasGuardadas = {}; // nuevas o cambiadas
+final Set<String> _fichasBorradas = {}; // fichas de fábrica ocultas
+final List<Sinergia> _sinergiasPropias = [];
+final Set<String> _sinergiasBorradas = {}; // sinergias de fábrica ocultas
+
+final Set<String> _idsDeFabrica = {for (final e in entradasDeFabrica) e.id};
+
+/// La misma clave sin importar el orden: tomate-papa = papa-tomate.
+String claveSinergia(String a, String b) =>
+    a.compareTo(b) <= 0 ? '$a|$b' : '$b|$a';
+
+bool esFichaDeFabrica(String id) => _idsDeFabrica.contains(id);
+
+/// true si una ficha de fábrica fue cambiada desde la app.
+bool fichaCambiada(String id) =>
+    esFichaDeFabrica(id) && _fichasGuardadas.containsKey(id);
+
+bool get hayCambiosEnEnciclopedia =>
+    _fichasGuardadas.isNotEmpty ||
+    _fichasBorradas.isNotEmpty ||
+    _sinergiasPropias.isNotEmpty ||
+    _sinergiasBorradas.isNotEmpty;
+
+/// Todas las fichas que se muestran: las de fábrica (con sus cambios)
+/// y después las que agregó la persona.
+List<Entrada> get entradas => [
+      for (final e in entradasDeFabrica)
+        if (!_fichasBorradas.contains(e.id)) _fichasGuardadas[e.id] ?? e,
+      for (final e in _fichasGuardadas.values)
+        if (!esFichaDeFabrica(e.id)) e,
+    ];
+
+List<Sinergia> get sinergias => [
+      for (final s in sinergiasDeFabrica)
+        if (!_sinergiasBorradas.contains(claveSinergia(s.a, s.b))) s,
+      ..._sinergiasPropias,
+    ];
+
+/// Guarda una ficha nueva o los cambios a una que ya existe.
+void guardarFicha(Entrada ficha) {
+  _fichasGuardadas[ficha.id] = ficha;
+  _fichasBorradas.remove(ficha.id);
+}
+
+void borrarFicha(String id) {
+  _fichasGuardadas.remove(id);
+  if (esFichaDeFabrica(id)) _fichasBorradas.add(id);
+  _sinergiasPropias.removeWhere((s) => s.a == id || s.b == id);
+}
+
+/// Deshace los cambios hechos a una ficha de fábrica.
+void restaurarFicha(String id) => _fichasGuardadas.remove(id);
+
+/// Guarda una sinergia. Si ya había una entre esas dos fichas, la reemplaza.
+void guardarSinergia(Sinergia sinergia) {
+  borrarSinergia(sinergia.a, sinergia.b);
+  _sinergiasPropias.add(sinergia);
+}
+
+void borrarSinergia(String a, String b) {
+  final clave = claveSinergia(a, b);
+  _sinergiasPropias.removeWhere((s) => claveSinergia(s.a, s.b) == clave);
+  if (sinergiasDeFabrica.any((s) => claveSinergia(s.a, s.b) == clave)) {
+    _sinergiasBorradas.add(clave);
+  }
+}
+
+/// Texto con todos los cambios, para guardarlo en el teléfono.
+String exportarEnciclopedia() => jsonEncode({
+      'fichas': [for (final e in _fichasGuardadas.values) e.aJson()],
+      'fichasBorradas': _fichasBorradas.toList(),
+      'sinergias': [for (final s in _sinergiasPropias) s.aJson()],
+      'sinergiasBorradas': _sinergiasBorradas.toList(),
+    });
+
+/// Carga los cambios guardados. Con null, vuelve a la enciclopedia de fábrica.
+void cargarEnciclopedia(String? texto) {
+  _fichasGuardadas.clear();
+  _fichasBorradas.clear();
+  _sinergiasPropias.clear();
+  _sinergiasBorradas.clear();
+  if (texto == null) return;
+
+  try {
+    final j = jsonDecode(texto) as Map<String, dynamic>;
+    for (final f in (j['fichas'] as List? ?? const [])) {
+      try {
+        final ficha = Entrada.desdeJson(Map<String, dynamic>.from(f as Map));
+        _fichasGuardadas[ficha.id] = ficha;
+      } catch (_) {
+        // Una ficha dañada no impide cargar las demás.
+      }
+    }
+    for (final id in (j['fichasBorradas'] as List? ?? const [])) {
+      if (id is String) _fichasBorradas.add(id);
+    }
+    for (final s in (j['sinergias'] as List? ?? const [])) {
+      try {
+        _sinergiasPropias
+            .add(Sinergia.desdeJson(Map<String, dynamic>.from(s as Map)));
+      } catch (_) {
+        // Igual con las sinergias.
+      }
+    }
+    for (final c in (j['sinergiasBorradas'] as List? ?? const [])) {
+      if (c is String) _sinergiasBorradas.add(c);
+    }
+  } catch (_) {
+    // Si el texto guardado no se puede leer, queda la enciclopedia de fábrica.
+  }
+}
 
 // ---------------------------------------------------------------------------
 // FUNCIONES DE BÚSQUEDA

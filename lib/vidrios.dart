@@ -13,10 +13,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'ajustes.dart';
 import 'ganado.dart' show urlFirebase;
 
-const _verde = Color(0xFF16A34A);
-const _verdeOscuro = Color(0xFF0E3B34);
+Color get _verde => cPrincipal;
+Color get _verdeOscuro => cBarra;
 const _cielo = Color(0xFF7DD3FC);
 const _vidrio = Color(0xFF94A3B8);
 
@@ -99,7 +100,7 @@ class EstadoVidrios {
   });
 
   factory EstadoVidrios.desdeJson(Map<String, dynamic>? j) {
-    if (j == null) return const EstadoVidrios();
+    if (j == null) return EstadoVidrios();
     final act = j['actualizado'];
     return EstadoVidrios(
       apertura: (j['apertura'] as num?)?.round() ?? 0,
@@ -123,7 +124,7 @@ class EstadoVidrios {
 
   bool get desconectado =>
       actualizado == null ||
-      DateTime.now().difference(actualizado!) > const Duration(minutes: 2);
+      DateTime.now().difference(actualizado!) > Duration(minutes: 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +137,7 @@ class ServicioVidrios {
   static Future<(ConfigVidrios, EstadoVidrios, bool)?> obtener() async {
     final r = await http
         .get(Uri.parse(_url('')))
-        .timeout(const Duration(seconds: 10));
+        .timeout(Duration(seconds: 10));
     if (r.statusCode != 200) {
       throw Exception('Firebase respondió ${r.statusCode}');
     }
@@ -164,7 +165,7 @@ class ServicioVidrios {
         .put(Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(datos))
-        .timeout(const Duration(seconds: 10));
+        .timeout(Duration(seconds: 10));
     if (r.statusCode != 200) {
       throw Exception('Firebase respondió ${r.statusCode}');
     }
@@ -184,7 +185,7 @@ class PantallaVidrios extends StatefulWidget {
 
 class _PantallaVidriosState extends State<PantallaVidrios> {
   ConfigVidrios? _config;
-  EstadoVidrios _estado = const EstadoVidrios();
+  EstadoVidrios _estado = EstadoVidrios();
   bool _ordenPendiente = false;
   bool _sinControlador = false;
   bool _cargado = false;
@@ -196,7 +197,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
     super.initState();
     _cargar();
     _temporizador =
-        Timer.periodic(const Duration(seconds: 2), (_) => _cargar());
+        Timer.periodic(Duration(seconds: 2), (_) => _cargar());
   }
 
   @override
@@ -235,7 +236,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
       avisos.showSnackBar(SnackBar(content: Text(mensaje)));
       await _cargar();
     } catch (_) {
-      avisos.showSnackBar(const SnackBar(
+      avisos.showSnackBar(SnackBar(
           content: Text('No se pudo enviar. Revisa tu conexión.')));
     }
   }
@@ -252,16 +253,16 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF1EFE8),
+      backgroundColor: cFondo,
       appBar: AppBar(
         backgroundColor: _verdeOscuro,
         foregroundColor: Colors.white,
-        title: const Text('Vidrios del techo'),
+        title: Text('Vidrios del techo'),
       ),
       body: !_cargado
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator())
           : _sinControlador
-              ? const Center(
+              ? Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
@@ -282,7 +283,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
         (c?.cerrarPorClima ?? true) && (e.lloviendo || (e.viento ?? 0) >= (c?.vientoMax ?? 40));
 
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       children: [
         if (_error != null) _aviso(Icons.cloud_off, _error!, Colors.red.shade700),
         if (e.desconectado && _error == null)
@@ -295,50 +296,66 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
                   : e.lloviendo
                   ? 'Está lloviendo: el techo se mantiene cerrado.'
                   : 'Viento fuerte (${e.viento} km/h): el techo se mantiene cerrado.',
-              const Color(0xFF0284C7)),
+              Color(0xFF0284C7)),
 
         // Dibujo y estado
         _tarjeta(
           children: [
             _DiagramaTecho(apertura: e.apertura / 100),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Row(
               children: [
                 Text('${e.apertura} %',
-                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
-                const SizedBox(width: 12),
+                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800)),
+                SizedBox(width: 12),
                 Expanded(child: Text(_textoEstado(e))),
               ],
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(backgroundColor: _verde),
-                    icon: const Icon(Icons.open_in_full),
-                    label: const Text('Abrir'),
+                    icon: Icon(Icons.open_in_full),
+                    label: Text('Abrir'),
                     onPressed: bloqueado ? null : () => _mover(100),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(
                   child: FilledButton.icon(
                     style: FilledButton.styleFrom(backgroundColor: _verdeOscuro),
-                    icon: const Icon(Icons.close_fullscreen),
-                    label: const Text('Cerrar'),
+                    icon: Icon(Icons.close_fullscreen),
+                    label: Text('Cerrar'),
                     onPressed: () => _mover(0),
                   ),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 IconButton.outlined(
-                  icon: const Icon(Icons.stop),
+                  icon: Icon(Icons.stop),
                   tooltip: 'Detener',
                   onPressed: () => _ejecutar(ServicioVidrios.detener, 'Orden enviada: detener'),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
+            // Botones rápidos (se eligen en Ajustes)
+            if (Ajustes.i.atajosVidrio.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final p in Ajustes.i.atajosVidrio)
+                    OutlinedButton(
+                      onPressed:
+                          bloqueado && p > 0 ? null : () => _mover(p),
+                      child: Text('$p %'),
+                    ),
+                ],
+              ),
+              SizedBox(height: 8),
+            ],
             _SliderAlSoltar(
               titulo: (v) => 'Llevar a $v %',
               valor: e.apertura,
@@ -349,7 +366,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
               alSoltar: _mover,
             ),
             if (_ordenPendiente)
-              const Text('Orden en camino…',
+              Text('Orden en camino…',
                   style: TextStyle(color: Colors.orange)),
           ],
         ),
@@ -409,7 +426,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
         SizedBox(
           width: double.infinity,
           child: SegmentedButton<String>(
-            segments: const [
+            segments: [
               ButtonSegment(value: 'manual', icon: Icon(Icons.touch_app), label: Text('Manual')),
               ButtonSegment(value: 'auto', icon: Icon(Icons.auto_mode), label: Text('Automático')),
             ],
@@ -420,7 +437,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
             },
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         if (c.modo == 'auto') ...[
           Text(
             'Cerrado con ${c.tempCerrar.round()} °C o menos, abierto por completo '
@@ -443,13 +460,13 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
             onChangeEnd: (_) => _guardar(),
           ),
         ] else
-          const Text('El techo solo se mueve cuando tú lo ordenas.',
-              style: TextStyle(color: Colors.black54)),
-        const Divider(height: 24),
+          Text('El techo solo se mueve cuando tú lo ordenas.',
+              style: TextStyle(color: cTenue)),
+        Divider(height: 24),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Cerrar con lluvia o viento fuerte'),
-          subtitle: const Text('Funciona en ambos modos'),
+          title: Text('Cerrar con lluvia o viento fuerte'),
+          subtitle: Text('Funciona en ambos modos'),
           value: c.cerrarPorClima,
           activeTrackColor: _verde,
           onChanged: (v) {
@@ -486,30 +503,30 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
     String n(double x, [int d = 2]) => x.toStringAsFixed(d);
 
     final filas = <Widget>[
-      const Text('1. Del giro del servo al avance del vidrio',
+      Text('1. Del giro del servo al avance del vidrio',
           style: TextStyle(fontWeight: FontWeight.w700)),
-      const SizedBox(height: 6),
+      SizedBox(height: 6),
       _formula('x = r · θ'),
       Text('r = ${n(r, 1)} cm (radio del engrane), θ en radianes'),
       Text('Abrir ${n(l, 1)} cm necesita θ = ${n(l / r)} rad '
           '≈ ${(l / r * 180 / pi).round()}°'),
-      const SizedBox(height: 4),
+      SizedBox(height: 4),
       Text(
           'Ahora: θ = ${n(thetaRad)} rad (${(thetaRad * 180 / pi).round()}°) '
           '→ x = ${n(xActual, 1)} cm',
-          style: const TextStyle(color: Colors.black54)),
-      const Divider(height: 24),
-      const Text('2. Posición del vidrio en el tiempo',
+          style: TextStyle(color: cTenue)),
+      Divider(height: 24),
+      Text('2. Posición del vidrio en el tiempo',
           style: TextStyle(fontWeight: FontWeight.w700)),
-      const SizedBox(height: 6),
+      SizedBox(height: 6),
       _formula('x(t) = v · t'),
       Text('v = ${n(v, 1)} cm/s, el servo gira a ω = v / r '
           '≈ ${omegaGrados.round()}° por segundo'),
       Text('Dominio: 0 ≤ t ≤ ${n(tTotal, 1)} s   (T = L / v)'),
       Text('Rango: 0 ≤ x ≤ ${n(l, 1)} cm   (L = recorrido)'),
-      const SizedBox(height: 4),
+      SizedBox(height: 4),
       Text('Desde cerrado, llegar aquí tomó t = ${n(xActual / v, 1)} s.',
-          style: const TextStyle(color: Colors.black54)),
+          style: TextStyle(color: cTenue)),
     ];
 
     if (c != null) {
@@ -517,19 +534,19 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
       final ta = c.tempAbrir;
       final pendiente = 100 / (ta - tc);
       filas.addAll([
-        const Divider(height: 24),
-        const Text('3. Apertura según la temperatura (modo automático)',
+        Divider(height: 24),
+        Text('3. Apertura según la temperatura (modo automático)',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         _formula('A(T) = 100 · (T − ${tc.round()}) / (${ta.round()} − ${tc.round()})'),
         Text('Pendiente: ${n(pendiente, 1)} % por cada °C'),
         Text('Dominio útil: ${tc.round()} ≤ T ≤ ${ta.round()} °C   Rango: 0 ≤ A ≤ 100 %'),
         if (e.tempInterior != null) ...[
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(
             'Con ${e.tempInterior} °C adentro: '
             'A = ${n((100 * (e.tempInterior! - tc) / (ta - tc)).clamp(0.0, 100.0), 0)} %',
-            style: const TextStyle(color: Colors.black54),
+            style: TextStyle(color: cTenue),
           ),
         ],
       ]);
@@ -543,24 +560,24 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
   Widget _formula(String texto) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+      margin: EdgeInsets.only(bottom: 6),
+      padding: EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
         color: _verde.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(texto,
-          style: const TextStyle(
+          style: TextStyle(
               fontSize: 18, fontWeight: FontWeight.w700, fontFamily: 'monospace')),
     );
   }
 
   Widget _tarjeta({String? titulo, IconData? icono, required List<Widget> children}) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -568,12 +585,12 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
               Row(
                 children: [
                   Icon(icono, color: _verde),
-                  const SizedBox(width: 8),
+                  SizedBox(width: 8),
                   Text(titulo,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
             ],
             ...children,
           ],
@@ -586,18 +603,18 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icono, size: 18, color: Colors.black54),
-        const SizedBox(width: 4),
-        Text('$etiqueta: ', style: const TextStyle(color: Colors.black54)),
-        Text(valor, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Icon(icono, size: 18, color: cTenue),
+        SizedBox(width: 4),
+        Text('$etiqueta: ', style: TextStyle(color: cTenue)),
+        Text(valor, style: TextStyle(fontWeight: FontWeight.w600)),
       ],
     );
   }
 
   Widget _aviso(IconData icono, String texto, Color color) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
@@ -606,7 +623,7 @@ class _PantallaVidriosState extends State<PantallaVidrios> {
       child: Row(
         children: [
           Icon(icono, color: color),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(child: Text(texto)),
         ],
       ),
@@ -627,9 +644,9 @@ class _DiagramaTecho extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Vista desde arriba',
-            style: TextStyle(fontSize: 12, color: Colors.black54)),
-        const SizedBox(height: 6),
+        Text('Vista desde arriba',
+            style: TextStyle(fontSize: 12, color: cTenue)),
+        SizedBox(height: 6),
         AspectRatio(
           aspectRatio: _largoEstructura / _anchoEstructura,
           child: LayoutBuilder(builder: (context, caja) {
@@ -637,8 +654,8 @@ class _DiagramaTecho extends StatelessWidget {
             final altoVidrio = caja.maxHeight * _anchoVidrio / _anchoEstructura;
             return Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFE7E5E4),
-                border: Border.all(color: _verdeOscuro, width: 2),
+                color: Color(0xFFE7E5E4),
+                border: Border.all(color: cContraste, width: 2),
                 borderRadius: BorderRadius.circular(6),
               ),
               alignment: Alignment.center,
@@ -652,7 +669,7 @@ class _DiagramaTecho extends StatelessWidget {
                     // El vidrio se desliza de lado (hacia abajo en el
                     // dibujo) al abrir, como en la maqueta
                     AnimatedFractionallySizedBox(
-                      duration: const Duration(milliseconds: 800),
+                      duration: Duration(milliseconds: 800),
                       alignment: Alignment.bottomCenter,
                       widthFactor: 1,
                       heightFactor: (1 - apertura).clamp(0.0, 1.0),
@@ -664,7 +681,7 @@ class _DiagramaTecho extends StatelessWidget {
                       ),
                     ),
                     if (apertura > 0.15)
-                      const Positioned(
+                      Positioned(
                         left: 8,
                         top: 4,
                         child: Icon(Icons.wb_sunny, color: Colors.amber),
@@ -675,10 +692,10 @@ class _DiagramaTecho extends StatelessWidget {
             );
           }),
         ),
-        const SizedBox(height: 4),
-        const Text(
+        SizedBox(height: 4),
+        Text(
           'Estructura 18.7 × 6.8 m · maqueta 1:50 de 37.4 × 13.6 cm',
-          style: TextStyle(fontSize: 11, color: Colors.black45),
+          style: TextStyle(fontSize: 11, color: cMuyTenue),
         ),
       ],
     );
@@ -725,7 +742,7 @@ class _SliderAlSoltarState extends State<_SliderAlSoltar> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(widget.titulo(_valor.round()),
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+            style: TextStyle(fontWeight: FontWeight.w600)),
         Slider(
           value: _valor.clamp(widget.min.toDouble(), widget.max.toDouble()),
           min: widget.min.toDouble(),

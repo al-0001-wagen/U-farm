@@ -5,34 +5,65 @@
 
 import 'package:flutter/material.dart';
 
+import 'ajustes.dart';
 import 'clima.dart';
 import 'enciclopedia.dart';
 import 'ganado.dart';
 import 'riego.dart';
 import 'vidrios.dart';
 
-void main() => runApp(const UFarmApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Ajustes.i.cargar(); // tema, color, inicio y enciclopedia guardados
+  runApp(const UFarmApp());
+}
 
-/// Colores tomados de la presentación del proyecto.
+/// Colores de la pantalla de carga. Siguen al color elegido en Ajustes.
 class UFarmColores {
-  static const fondo = Color(0xFF0E3B34); // verde oscuro de las diapositivas
-  static const verde = Color(0xFF16A34A); // verde de los recuadros
-  static const verdeClaro = Color(0xFF86EFAC);
+  static Color get fondo => cBarra;
+  static Color get verde => cPrincipal;
+  static Color get verdeClaro => cPrincipalClaro;
   static const crema = Color(0xFFF1EFE8);
 }
 
-class UFarmApp extends StatelessWidget {
+class UFarmApp extends StatefulWidget {
   const UFarmApp({super.key});
+
+  @override
+  State<UFarmApp> createState() => _UFarmAppState();
+}
+
+class _UFarmAppState extends State<UFarmApp> {
+  @override
+  void initState() {
+    super.initState();
+    Ajustes.i.addListener(_alCambiarAjustes);
+  }
+
+  @override
+  void dispose() {
+    Ajustes.i.removeListener(_alCambiarAjustes);
+    super.dispose();
+  }
+
+  /// Cuando cambia un ajuste (color, tema, botones, enciclopedia), se
+  /// vuelven a dibujar todas las pantallas abiertas para que lo muestren.
+  void _alCambiarAjustes() {
+    setState(() {});
+    void redibujar(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(redibujar);
+    }
+
+    WidgetsBinding.instance.rootElement?.visitChildren(redibujar);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'U Farm',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: UFarmColores.verde),
-      ),
+      theme: temaDeLaApp(),
       home: const PantallaCarga(),
     );
   }
@@ -226,7 +257,7 @@ class _PantallaCargaState extends State<PantallaCarga>
                           minHeight: 8,
                           backgroundColor:
                               Colors.white.withValues(alpha: 0.15),
-                          valueColor: const AlwaysStoppedAnimation(
+                          valueColor: AlwaysStoppedAnimation(
                             UFarmColores.verdeClaro,
                           ),
                         ),
@@ -254,97 +285,120 @@ class _PantallaCargaState extends State<PantallaCarga>
 }
 
 // ---------------------------------------------------------------------------
-// PANTALLA DE INICIO (provisional)
-// Aquí irá el menú principal: clima, riego, luz, conejeras y vidrios.
+// PANTALLA DE INICIO
+// Las tarjetas, su orden y sus nombres se eligen en Ajustes (el engrane).
 // ---------------------------------------------------------------------------
 
 class PantallaInicio extends StatelessWidget {
   const PantallaInicio({super.key});
 
+  void _abrir(BuildContext context, Widget pantalla) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => pantalla));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final visibles = Ajustes.i.tarjetas.where((t) => t.visible).toList();
+
     return Scaffold(
-      backgroundColor: UFarmColores.crema,
       appBar: AppBar(
-        backgroundColor: UFarmColores.fondo,
+        backgroundColor: cBarra,
         foregroundColor: Colors.white,
         title: const Text('U Farm'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Ajustes',
+            onPressed: () => _abrir(context, const PantallaAjustes()),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const TarjetaClima(),
-          const SizedBox(height: 16),
-          const TarjetaGanado(),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: const Icon(Icons.water_drop,
-                  color: Color(0xFF0284C7), size: 32),
-              title: const Text('Riego',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text(
-                  'Aspersores, horarios y humedad del suelo'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PantallaRiego()),
+          for (final t in visibles) ...[
+            _tarjeta(context, t),
+            const SizedBox(height: 16),
+          ],
+          if (visibles.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  const Text(
+                    'Todas las tarjetas están ocultas.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.settings_outlined),
+                    label: const Text('Abrir Ajustes'),
+                    onPressed: () => _abrir(context, const PantallaAjustes()),
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: const Icon(Icons.roofing,
-                  color: UFarmColores.fondo, size: 32),
-              title: const Text('Vidrios del techo',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text(
-                  'Abrir, cerrar y apertura automática por temperatura'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const PantallaVidrios()),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            child: ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              leading: const Icon(Icons.menu_book,
-                  color: UFarmColores.verde, size: 32),
-              title: const Text('Enciclopedia de la granja',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: const Text(
-                  'Cultivos, ganado, qué sembrar este mes y sinergias'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                    builder: (_) => const PantallaEnciclopedia()),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Center(
-            child: Text(
-              'Aquí irá el control de luz',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _tarjeta(BuildContext context, TarjetaInicio t) {
+    switch (t.id) {
+      case 'clima':
+        return const TarjetaClima();
+      case 'ganado':
+        return TarjetaGanado(titulo: t.nombre);
+      case 'riego':
+        return _acceso(
+          context,
+          icono: Icons.water_drop,
+          color: const Color(0xFF0284C7),
+          titulo: t.nombre,
+          descripcion: 'Aspersores, horarios y humedad del suelo',
+          pantalla: const PantallaRiego(),
+        );
+      case 'vidrios':
+        return _acceso(
+          context,
+          icono: Icons.roofing,
+          color: cContraste,
+          titulo: t.nombre,
+          descripcion: 'Abrir, cerrar y apertura automática por temperatura',
+          pantalla: const PantallaVidrios(),
+        );
+      default:
+        return _acceso(
+          context,
+          icono: Icons.menu_book,
+          color: cPrincipal,
+          titulo: t.nombre,
+          descripcion: 'Cultivos, ganado, qué sembrar este mes y sinergias',
+          pantalla: const PantallaEnciclopedia(),
+        );
+    }
+  }
+
+  Widget _acceso(
+    BuildContext context, {
+    required IconData icono,
+    required Color color,
+    required String titulo,
+    required String descripcion,
+    required Widget pantalla,
+  }) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: Icon(icono, color: color, size: 32),
+        title:
+            Text(titulo, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(descripcion),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => _abrir(context, pantalla),
       ),
     );
   }

@@ -12,6 +12,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'ajustes.dart';
+
 // ---------------------------------------------------------------------------
 // UBICACIÓN DE LA GRANJA
 // Cambien estos valores por las coordenadas reales del prototipo.
@@ -99,7 +101,7 @@ class ServicioClima {
     });
 
     final respuesta =
-        await http.get(uri).timeout(const Duration(seconds: 10));
+        await http.get(uri).timeout(Duration(seconds: 10));
 
     if (respuesta.statusCode != 200) {
       throw Exception(
@@ -233,8 +235,8 @@ class TarjetaClima extends StatefulWidget {
 }
 
 class _TarjetaClimaState extends State<TarjetaClima> {
-  static const Color _verdeOscuro = Color(0xFF0E3B34);
-  static const Color _verde = Color(0xFF16A34A);
+  Color get _verdeOscuro => cContraste;
+  Color get _verde => cPrincipal;
 
   late Future<DatosClima> _futuro;
   Timer? _temporizador;
@@ -244,7 +246,7 @@ class _TarjetaClimaState extends State<TarjetaClima> {
     super.initState();
     _futuro = ServicioClima.obtener();
     _temporizador =
-        Timer.periodic(const Duration(minutes: 30), (_) => _recargar());
+        Timer.periodic(Duration(minutes: 30), (_) => _recargar());
   }
 
   void _recargar() {
@@ -263,12 +265,12 @@ class _TarjetaClimaState extends State<TarjetaClima> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: FutureBuilder<DatosClima>(
           future: _futuro,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox(
+              return SizedBox(
                 height: 160,
                 child: Center(child: CircularProgressIndicator()),
               );
@@ -289,13 +291,13 @@ class _TarjetaClimaState extends State<TarjetaClima> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.cloud_off, size: 40, color: Colors.grey),
-          const SizedBox(height: 8),
-          const Text(
+          Icon(Icons.cloud_off, size: 40, color: Colors.grey),
+          SizedBox(height: 8),
+          Text(
             'No se pudo obtener el clima.\nRevisa tu conexión a internet.',
             textAlign: TextAlign.center,
           ),
-          TextButton(onPressed: _recargar, child: const Text('Reintentar')),
+          TextButton(onPressed: _recargar, child: Text('Reintentar')),
         ],
       ),
     );
@@ -312,18 +314,18 @@ class _TarjetaClimaState extends State<TarjetaClima> {
         // Encabezado
         Row(
           children: [
-            const Icon(Icons.place, size: 18, color: _verde),
-            const SizedBox(width: 4),
+            Icon(Icons.place, size: 18, color: _verde),
+            SizedBox(width: 4),
             Expanded(
               child: Text(
                 UbicacionGranja.nombre,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w600),
               ),
             ),
             Text('Actualizado $hora',
-                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
             IconButton(
-              icon: const Icon(Icons.refresh),
+              icon: Icon(Icons.refresh),
               tooltip: 'Actualizar',
               onPressed: _recargar,
             ),
@@ -335,19 +337,19 @@ class _TarjetaClimaState extends State<TarjetaClima> {
           children: [
             Icon(iconoClima(a.codigo, esDeDia: a.esDeDia),
                 size: 56, color: _verdeOscuro),
-            const SizedBox(width: 16),
+            SizedBox(width: 16),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${a.temperatura.round()} °C',
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 36, fontWeight: FontWeight.w700)),
                 Text(descripcionClima(a.codigo)),
               ],
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
 
         // Datos rápidos
         Wrap(
@@ -363,37 +365,37 @@ class _TarjetaClimaState extends State<TarjetaClima> {
           ],
         ),
 
-        const Divider(height: 28),
+        Divider(height: 28),
 
         // Recomendaciones
-        const Text('Recomendaciones para tu granja',
+        Text('Recomendaciones para tu granja',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         for (final r in recomendacionesGranja(clima))
           Padding(
-            padding: const EdgeInsets.only(bottom: 6),
+            padding: EdgeInsets.only(bottom: 6),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.eco, size: 18, color: _verde),
-                const SizedBox(width: 8),
+                Icon(Icons.eco, size: 18, color: _verde),
+                SizedBox(width: 8),
                 Expanded(child: Text(r)),
               ],
             ),
           ),
 
-        const Divider(height: 28),
+        Divider(height: 28),
 
         // Pronóstico de 7 días
-        const Text('Próximos 7 días',
+        Text('Próximos 7 días',
             style: TextStyle(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         SizedBox(
           height: 110,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: clima.dias.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            separatorBuilder: (_, __) => SizedBox(width: 8),
             itemBuilder: (_, i) => _dia(clima.dias[i], esHoy: i == 0),
           ),
         ),
@@ -404,7 +406,7 @@ class _TarjetaClimaState extends State<TarjetaClima> {
   Widget _dato(IconData icono, String texto) {
     return Chip(
       avatar: Icon(icono, size: 16),
-      label: Text(texto, style: const TextStyle(fontSize: 12)),
+      label: Text(texto, style: TextStyle(fontSize: 12)),
       visualDensity: VisualDensity.compact,
     );
   }
@@ -412,22 +414,22 @@ class _TarjetaClimaState extends State<TarjetaClima> {
   Widget _dia(PronosticoDia dia, {required bool esHoy}) {
     return Container(
       width: 70,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: esHoy ? _verde.withValues(alpha: 0.12) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cLinea),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           Text(esHoy ? 'Hoy' : _diasSemana[dia.fecha.weekday - 1],
-              style: const TextStyle(fontWeight: FontWeight.w600)),
+              style: TextStyle(fontWeight: FontWeight.w600)),
           Icon(iconoClima(dia.codigo), color: _verdeOscuro),
           Text('${dia.maxima.round()}° / ${dia.minima.round()}°',
-              style: const TextStyle(fontSize: 12)),
+              style: TextStyle(fontSize: 12)),
           Text('${dia.probabilidadLluvia} %',
-              style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
+              style: TextStyle(fontSize: 11, color: Colors.blueGrey)),
         ],
       ),
     );

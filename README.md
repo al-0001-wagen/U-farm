@@ -11,6 +11,18 @@ Aplicación de la granja urbana U Farm. Equipo 2, Grupo 211.
 | `herramientas/` | Script que prepara la parte de Android |
 | `.github/workflows/` | Compilación automática del APK en GitHub |
 
+## Personalizar la app
+
+Desde el engrane de la pantalla de inicio (**Ajustes**) se puede cambiar, sin tocar el código:
+
+- el tema (claro u oscuro) y el color de los botones,
+- qué tarjetas aparecen en el inicio, en qué orden y con qué nombre,
+- los tiempos de los botones de "Regar ahora" y los botones rápidos del vidrio.
+
+En la **Enciclopedia** se pueden agregar, editar y borrar fichas y sinergias. Todo esto se guarda en cada teléfono (`lib/ajustes.dart`); la enciclopedia original está en `lib/enciclopedia_datos.dart` y se puede restaurar desde Ajustes.
+
+Para agregar otro color a la lista, copien una línea de `opcionesColor` en `lib/ajustes.dart`.
+
 ## Antes de compilar: configurar
 
 1. **`lib/ganado.dart`**: `urlFirebase` es la URL de su Realtime Database de Firebase, sin "/" al final. La usan el ganado, el riego y los vidrios.

@@ -20,7 +20,7 @@ Future<void> main() async {
 
   // Respaldo por seguridad: flutter create no debe tocar estos archivos
   final respaldo = <String, String>{
-    for (final ruta in ['pubspec.yaml', 'lib/main.dart'])
+    for (final ruta in ['pubspec.yaml', 'lib/main.dart', 'analysis_options.yaml'])
       ruta: File(ruta).readAsStringSync(),
   };
 

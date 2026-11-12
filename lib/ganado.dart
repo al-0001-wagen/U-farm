@@ -11,6 +11,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'ajustes.dart';
+
 // ---------------------------------------------------------------------------
 // CONFIGURACIÓN
 // ---------------------------------------------------------------------------
@@ -115,7 +117,7 @@ class ServicioGanado {
   static Future<List<LecturaAnimal>> obtener() async {
     final respuesta = await http
         .get(Uri.parse('$urlFirebase/ganado.json'))
-        .timeout(const Duration(seconds: 10));
+        .timeout(Duration(seconds: 10));
 
     if (respuesta.statusCode != 200) {
       throw Exception('Firebase respondió ${respuesta.statusCode}');
@@ -140,7 +142,9 @@ class ServicioGanado {
 // ---------------------------------------------------------------------------
 
 class TarjetaGanado extends StatefulWidget {
-  const TarjetaGanado({super.key});
+  /// Título que se muestra arriba (se puede cambiar en Ajustes).
+  final String titulo;
+  const TarjetaGanado({super.key, this.titulo = 'Mi ganado'});
 
   @override
   State<TarjetaGanado> createState() => _TarjetaGanadoState();
@@ -155,7 +159,7 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
     super.initState();
     _futuro = ServicioGanado.obtener();
     _temporizador =
-        Timer.periodic(const Duration(seconds: 30), (_) => _recargar());
+        Timer.periodic(Duration(seconds: 30), (_) => _recargar());
   }
 
   void _recargar() => setState(() => _futuro = ServicioGanado.obtener());
@@ -172,21 +176,21 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.pets, color: Color(0xFF16A34A)),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text('Mi ganado',
+                Icon(Icons.pets, color: cPrincipal),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(widget.titulo,
                       style:
                           TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.refresh),
+                  icon: Icon(Icons.refresh),
                   tooltip: 'Actualizar',
                   onPressed: _recargar,
                 ),
@@ -197,13 +201,13 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting &&
                     !snapshot.hasData) {
-                  return const Padding(
+                  return Padding(
                     padding: EdgeInsets.all(24),
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
                 if (snapshot.hasError) {
-                  return const Padding(
+                  return Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
                         'No se pudieron leer los collares. Revisa tu conexión.'),
@@ -211,7 +215,7 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
                 }
                 final animales = snapshot.data ?? [];
                 if (animales.isEmpty) {
-                  return const Padding(
+                  return Padding(
                     padding: EdgeInsets.all(16),
                     child: Text('Todavía no hay collares enviando datos.'),
                   );
@@ -235,8 +239,8 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
     };
 
     return Container(
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(top: 10),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.5)),
@@ -249,14 +253,14 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
             children: [
               Expanded(
                 child: Text(a.id,
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                    style: TextStyle(fontWeight: FontWeight.w700)),
               ),
               Icon(icono, size: 18, color: color),
-              const SizedBox(width: 4),
+              SizedBox(width: 4),
               Text(texto, style: TextStyle(color: color)),
             ],
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Wrap(
             spacing: 16,
             runSpacing: 4,
@@ -272,7 +276,7 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
           ),
           for (final alerta in a.alertas)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: EdgeInsets.only(top: 6),
               child: Text('• $alerta', style: TextStyle(color: color)),
             ),
         ],
@@ -284,8 +288,8 @@ class _TarjetaGanadoState extends State<TarjetaGanado> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icono, size: 16, color: Colors.black54),
-        const SizedBox(width: 4),
+        Icon(icono, size: 16, color: cTenue),
+        SizedBox(width: 4),
         Text(texto),
       ],
     );

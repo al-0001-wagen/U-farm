@@ -13,10 +13,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'ajustes.dart';
 import 'ganado.dart' show urlFirebase;
 
-const _verde = Color(0xFF16A34A);
-const _verdeOscuro = Color(0xFF0E3B34);
+Color get _verde => cPrincipal;
+Color get _verdeOscuro => cBarra;
 const _azul = Color(0xFF0284C7);
 
 // ---------------------------------------------------------------------------
@@ -95,7 +96,7 @@ class EstadoZona {
   });
 
   factory EstadoZona.desdeJson(Map<String, dynamic>? j) {
-    if (j == null) return const EstadoZona();
+    if (j == null) return EstadoZona();
     DateTime? fecha(dynamic v) =>
         v is num ? DateTime.fromMillisecondsSinceEpoch(v.toInt()) : null;
     return EstadoZona(
@@ -115,7 +116,7 @@ class EstadoZona {
   /// El controlador publica cada minuto; si pasan más de 3, algo falla.
   bool get controladorDesconectado =>
       actualizado == null ||
-      DateTime.now().difference(actualizado!) > const Duration(minutes: 3);
+      DateTime.now().difference(actualizado!) > Duration(minutes: 3);
 }
 
 class ZonaRiego {
@@ -136,7 +137,7 @@ class ServicioRiego {
   static Future<List<ZonaRiego>> obtener() async {
     final r = await http
         .get(Uri.parse(_url('')))
-        .timeout(const Duration(seconds: 10));
+        .timeout(Duration(seconds: 10));
     if (r.statusCode != 200) {
       throw Exception('Firebase respondió ${r.statusCode}');
     }
@@ -171,7 +172,7 @@ class ServicioRiego {
         .put(Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(datos))
-        .timeout(const Duration(seconds: 10));
+        .timeout(Duration(seconds: 10));
     if (r.statusCode != 200) {
       throw Exception('Firebase respondió ${r.statusCode}');
     }
@@ -199,7 +200,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
     super.initState();
     _cargar();
     _temporizador =
-        Timer.periodic(const Duration(seconds: 2), (_) => _cargar());
+        Timer.periodic(Duration(seconds: 2), (_) => _cargar());
   }
 
   @override
@@ -229,7 +230,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
       avisos.showSnackBar(SnackBar(content: Text(mensaje)));
       await _cargar();
     } catch (_) {
-      avisos.showSnackBar(const SnackBar(
+      avisos.showSnackBar(SnackBar(
           content: Text('No se pudo enviar. Revisa tu conexión.')));
     }
   }
@@ -245,14 +246,14 @@ class _PantallaRiegoState extends State<PantallaRiego> {
     final mlHoy = zonas == null ? 0 : _mlDeHoy(zonas);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF1EFE8),
+      backgroundColor: cFondo,
       appBar: AppBar(
         backgroundColor: _verdeOscuro,
         foregroundColor: Colors.white,
-        title: const Text('Riego'),
+        title: Text('Riego'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh),
             tooltip: 'Actualizar',
             onPressed: _cargar,
           ),
@@ -261,16 +262,16 @@ class _PantallaRiegoState extends State<PantallaRiego> {
       body: zonas == null
           ? Center(
               child: _error == null
-                  ? const CircularProgressIndicator()
+                  ? CircularProgressIndicator()
                   : Text(_error!, textAlign: TextAlign.center),
             )
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(16),
               children: [
                 if (_error != null)
                   _aviso(Icons.cloud_off, _error!, Colors.red.shade700),
                 if (zonas.isEmpty)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
                       'Todavía no hay zonas. Enciende el controlador de riego: '
@@ -323,7 +324,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
         .map((z) => z.estado.lluviaHoy)
         .whereType<int>()
         .fold<int?>(null, (a, b) => a == null || b > a ? b : a);
-    if (prob == null) return const SizedBox.shrink();
+    if (prob == null) return SizedBox.shrink();
     final saltara = prob >= 60;
     return _aviso(
       saltara ? Icons.umbrella : Icons.wb_sunny_outlined,
@@ -338,8 +339,8 @@ class _PantallaRiegoState extends State<PantallaRiego> {
 
   Widget _aviso(IconData icono, String texto, Color color) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
@@ -349,7 +350,7 @@ class _PantallaRiegoState extends State<PantallaRiego> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icono, color: color),
-          const SizedBox(width: 10),
+          SizedBox(width: 10),
           Expanded(child: Text(texto)),
         ],
       ),
@@ -380,28 +381,28 @@ class _TarjetaZona extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: e.regando
-            ? const BorderSide(color: _azul, width: 2)
+            ? BorderSide(color: _azul, width: 2)
             : BorderSide.none,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _encabezado(context),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             _lineaEstado(),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             _humedad(),
-            const SizedBox(height: 14),
+            SizedBox(height: 14),
             _botones(context),
-            const Divider(height: 32),
+            Divider(height: 32),
             _selectorModo(),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             ..._opcionesDelModo(context),
           ],
         ),
@@ -413,15 +414,15 @@ class _TarjetaZona extends StatelessWidget {
     return Row(
       children: [
         Icon(Icons.water_drop,
-            color: e.regando ? _azul : Colors.black26, size: 28),
-        const SizedBox(width: 8),
+            color: e.regando ? _azul : cLinea, size: 28),
+        SizedBox(width: 8),
         Expanded(
           child: Text(c.nombre,
               style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         ),
         IconButton(
-          icon: const Icon(Icons.edit_outlined),
+          icon: Icon(Icons.edit_outlined),
           tooltip: 'Cambiar nombre',
           onPressed: () => _cambiarNombre(context),
         ),
@@ -431,7 +432,7 @@ class _TarjetaZona extends StatelessWidget {
 
   Widget _lineaEstado() {
     String texto;
-    Color color = Colors.black54;
+    Color color = cTenue;
 
     if (e.controladorDesconectado) {
       texto = 'Controlador sin conexión';
@@ -459,8 +460,8 @@ class _TarjetaZona extends StatelessWidget {
   Widget _humedad() {
     final h = e.humedad;
     if (h == null) {
-      return const Text('Sin sensor de humedad en esta zona',
-          style: TextStyle(color: Colors.black45));
+      return Text('Sin sensor de humedad en esta zona',
+          style: TextStyle(color: cMuyTenue));
     }
     final seco = h < c.umbralHumedad;
     return Column(
@@ -468,30 +469,30 @@ class _TarjetaZona extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text('Humedad del suelo'),
-            const Spacer(),
+            Text('Humedad del suelo'),
+            Spacer(),
             Text('$h %',
                 style: TextStyle(
                     fontWeight: FontWeight.w700,
                     color: seco ? Colors.orange.shade800 : _verde)),
           ],
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: LinearProgressIndicator(
             value: h / 100,
             minHeight: 10,
-            backgroundColor: Colors.black12,
+            backgroundColor: cLinea,
             valueColor: AlwaysStoppedAnimation(
                 seco ? Colors.orange.shade700 : _azul),
           ),
         ),
         if (c.modo == 'auto')
           Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: EdgeInsets.only(top: 4),
             child: Text('Riega automáticamente por debajo de ${c.umbralHumedad} %',
-                style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                style: TextStyle(fontSize: 12, color: cTenue)),
           ),
       ],
     );
@@ -503,16 +504,16 @@ class _TarjetaZona extends StatelessWidget {
         Expanded(
           child: FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: _azul),
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Regar ahora'),
+            icon: Icon(Icons.play_arrow),
+            label: Text('Regar ahora'),
             onPressed: e.regando ? null : () => _elegirMinutos(context),
           ),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(
           child: OutlinedButton.icon(
-            icon: const Icon(Icons.stop),
-            label: const Text('Detener'),
+            icon: Icon(Icons.stop),
+            label: Text('Detener'),
             onPressed: (e.regando || e.enEspera) ? alDetener : null,
           ),
         ),
@@ -524,7 +525,7 @@ class _TarjetaZona extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<String>(
-        segments: const [
+        segments: [
           ButtonSegment(
               value: 'manual', icon: Icon(Icons.touch_app), label: Text('Manual')),
           ButtonSegment(
@@ -544,22 +545,22 @@ class _TarjetaZona extends StatelessWidget {
   List<Widget> _opcionesDelModo(BuildContext context) {
     switch (c.modo) {
       case 'manual':
-        return const [
+        return [
           Text('Solo riega cuando presionas "Regar ahora".',
-              style: TextStyle(color: Colors.black54)),
+              style: TextStyle(color: cTenue)),
         ];
 
       case 'horario':
         return [
-          const Text('Horarios', style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
+          Text('Horarios', style: TextStyle(fontWeight: FontWeight.w600)),
+          SizedBox(height: 6),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               for (final h in c.horarios)
                 InputChip(
-                  avatar: const Icon(Icons.schedule, size: 18),
+                  avatar: Icon(Icons.schedule, size: 18),
                   label: Text(h),
                   onDeleted: () {
                     c.horarios.remove(h);
@@ -568,17 +569,17 @@ class _TarjetaZona extends StatelessWidget {
                 ),
               if (c.horarios.length < 6)
                 ActionChip(
-                  avatar: const Icon(Icons.add, size: 18),
-                  label: const Text('Agregar'),
+                  avatar: Icon(Icons.add, size: 18),
+                  label: Text('Agregar'),
                   onPressed: () => _agregarHorario(context),
                 ),
             ],
           ),
-          const SizedBox(height: 4),
-          const Text(
+          SizedBox(height: 4),
+          Text(
             'Lo mejor es regar temprano o al atardecer: con el sol fuerte '
             'se evapora mucha agua.',
-            style: TextStyle(fontSize: 12, color: Colors.black54),
+            style: TextStyle(fontSize: 12, color: cTenue),
           ),
           _deslizadorDuracion(),
           _interruptorLluvia(),
@@ -622,8 +623,8 @@ class _TarjetaZona extends StatelessWidget {
   Widget _interruptorLluvia() {
     return SwitchListTile(
       contentPadding: EdgeInsets.zero,
-      title: const Text('No regar si se espera lluvia'),
-      subtitle: const Text('Usa el pronóstico del día'),
+      title: Text('No regar si se espera lluvia'),
+      subtitle: Text('Usa el pronóstico del día'),
       value: c.saltarSiLlueve,
       activeTrackColor: _verde,
       onChanged: (v) {
@@ -645,14 +646,14 @@ class _TarjetaZona extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(16),
               child: Text('¿Cuánto tiempo regar?',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
             ),
-            for (final s in [3, 5, 10, 20])
+            for (final s in Ajustes.i.tiemposRiego)
               ListTile(
-                leading: const Icon(Icons.timer_outlined),
+                leading: Icon(Icons.timer_outlined),
                 title: Text('$s segundos'),
                 subtitle: Text('≈ ${_ml(s)} mL de agua'),
                 onTap: () => Navigator.pop(ctx, s),
@@ -667,7 +668,7 @@ class _TarjetaZona extends StatelessWidget {
   Future<void> _agregarHorario(BuildContext context) async {
     final hora = await showTimePicker(
       context: context,
-      initialTime: const TimeOfDay(hour: 6, minute: 0),
+      initialTime: TimeOfDay(hour: 6, minute: 0),
       helpText: 'Hora de riego',
     );
     if (hora == null) return;
@@ -685,19 +686,19 @@ class _TarjetaZona extends StatelessWidget {
     final nuevo = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Nombre de la zona'),
+        title: Text('Nombre de la zona'),
         content: TextField(
           controller: control,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Ej. Lechugas, Alfalfa'),
+          decoration: InputDecoration(hintText: 'Ej. Lechugas, Alfalfa'),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar')),
+              child: Text('Cancelar')),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, control.text.trim()),
-              child: const Text('Guardar')),
+              child: Text('Guardar')),
         ],
       ),
     );
@@ -753,9 +754,9 @@ class _SliderGuardableState extends State<_SliderGuardable> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Text(widget.titulo(_valor.round()),
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+            style: TextStyle(fontWeight: FontWeight.w600)),
         Slider(
           value: _valor,
           min: widget.min.toDouble(),
